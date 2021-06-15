@@ -25,7 +25,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.cardview.widget.CardView
-import androidx.paging.PagedListAdapter
+import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.RequestManager
@@ -37,7 +37,7 @@ class ArchiveRecyclerViewAdapter(
     private val longListener: ((a: Archive) -> Boolean)?,
     private val scope: CoroutineScope,
     private val glideManager: RequestManager
-) : PagedListAdapter<Archive, ArchiveRecyclerViewAdapter.ViewHolder>(DIFF_CALLBACK) {
+) : PagingDataAdapter<Archive, ArchiveRecyclerViewAdapter.ViewHolder>(DIFF_CALLBACK) {
 
     private val mOnClickListener: View.OnClickListener = View.OnClickListener { v ->
         val item = v.tag as Archive

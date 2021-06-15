@@ -20,6 +20,7 @@ package com.utazukin.ichaival
 
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProviders
+import androidx.paging.liveData
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -73,7 +74,7 @@ object ReaderTabHolder {
     fun initialize(context: FragmentActivity) {
         if (!initialized) {
             val viewModel = ViewModelProviders.of(context).get(ReaderTabViewModel::class.java)
-            viewModel.bookmarks.observeForever { tabCount = it.size }
+            viewModel.bookmarks.liveData.observeForever { GlobalScope.launch { tabCount = viewModel.getCount() } }
             initialized = true
         }
     }

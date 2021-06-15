@@ -18,7 +18,7 @@
 
 package com.utazukin.ichaival
 
-import androidx.paging.DataSource
+import androidx.paging.PagingSource
 import androidx.room.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -78,6 +78,9 @@ interface ArchiveDao {
     @Query("Select id from archive")
     fun getAllIds() : List<String>
 
+    @Query("select count(id) from readertab")
+    suspend fun getBookmarkCount() : Int
+
     @Query("Select currentPage from archive where id = :id and currentPage >= 0 limit 1")
     fun getBookmarkedPage(id: String) : Int?
 
@@ -100,7 +103,7 @@ interface ArchiveDao {
     suspend fun getBookmark(id: String) : ReaderTab?
 
     @Query("Select * from readertab order by `index`")
-    fun getDataBookmarks() : DataSource.Factory<Int, ReaderTab>
+    fun getDataBookmarks() : PagingSource<Int, ReaderTab>
 
     @Query("Delete from archive where id = :id")
     fun removeArchive(id: String)

@@ -39,6 +39,7 @@ import com.bumptech.glide.Glide
 import com.google.android.material.navigation.NavigationView
 import com.utazukin.ichaival.ReaderTabViewAdapter.OnTabInteractionListener
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
 import kotlin.coroutines.CoroutineContext
 
 const val TAG_SEARCH = "tag"
@@ -102,11 +103,15 @@ abstract class BaseActivity : AppCompatActivity(), DatabaseMessageListener, OnTa
         with(tabView) {
             layoutManager = LinearLayoutManager(context)
             adapter = ReaderTabViewAdapter(listener, listener, Glide.with(listener)).also {
-                viewModel.bookmarks.observe(this@BaseActivity, { list ->
-                    val itemAdded = list.size == it.itemCount + 1
-                    val scrollTarget = list.size - 1
-                    it.submitList(list) { if (itemAdded) scrollToPosition(scrollTarget) }
-                })
+                launch {
+                    viewModel.bookmarks.flow.collectLatest { data ->
+                        val size = viewModel.getCount()
+                        val itemAdded = size == it.itemCount + 1
+                        val scrollTarget = size - 1
+                        it.submitData(data)
+                        if (itemAdded) scrollToPosition(scrollTarget)
+                    }
+                }
             }
 
             val dividerDecoration = DividerItemDecoration(context, LinearLayoutManager.VERTICAL)

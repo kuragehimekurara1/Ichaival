@@ -39,6 +39,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.bumptech.glide.Glide
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.floor
 
 private const val RESULTS_KEY = "search_results"
@@ -261,16 +262,26 @@ class ArchiveListFragment : Fragment(), DatabaseRefreshListener, SharedPreferenc
                     }
                 }
             }
-            viewModel?.archiveList?.observe(viewLifecycleOwner, {
-                listAdapter.submitList(it)
-                val size = it.size
-                (activity as AppCompatActivity).supportActionBar?.subtitle = resources.getQuantityString(R.plurals.archive_count, size, size)
-            })
+            launch {
+                viewModel?.archiveList?.flow?.collectLatest {
+                    val size = getDisplaySize()
+                    (activity as AppCompatActivity).supportActionBar?.subtitle = resources.getQuantityString(R.plurals.archive_count, size, size)
+                    listAdapter.submitData(it)
+                }
+            }
             updateSortMethod(method, descending, prefs)
 
             savedState = null
             creatingView = false
         }
+    }
+
+    private suspend fun getDisplaySize() : Int {
+        return if (!newCheckBox.isChecked && searchView.query.isNullOrBlank())
+            withContext(Dispatchers.IO) { DatabaseReader.database.archiveDao().getArchiveCount() }
+        else
+            viewModel?.totalSize ?: 0
+
     }
 
     fun handleCategoryChange(category: ArchiveCategory) {
@@ -285,11 +296,13 @@ class ArchiveListFragment : Fragment(), DatabaseRefreshListener, SharedPreferenc
             val model = ViewModelProviders.of(this).get(StaticCategoryModel::class.java).apply {
                 init(category.archiveIds, category.id, sortMethod, descending, newCheckBox.isChecked)
             }
-            model.archiveList?.observe(viewLifecycleOwner, {
-                (listView.adapter as ArchiveRecyclerViewAdapter).submitList(it)
-                val size = it.size
-                (activity as AppCompatActivity).supportActionBar?.subtitle = resources.getQuantityString(R.plurals.archive_count, size, size)
-            })
+            lifecycleScope.launch(Dispatchers.IO) {
+                model.archiveList?.flow?.collectLatest {
+                    val size = model.totalSize
+                    withContext(Dispatchers.Main) { (activity as AppCompatActivity).supportActionBar?.subtitle = resources.getQuantityString(R.plurals.archive_count, size, size) }
+                    (listView.adapter as ArchiveRecyclerViewAdapter).submitData(it)
+                }
+            }
 
             model.filter(newCheckBox.isChecked)
             viewModel = model
@@ -441,7 +454,7 @@ class ArchiveListFragment : Fragment(), DatabaseRefreshListener, SharedPreferenc
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        val serverSource = viewModel?.archiveList?.value?.dataSource as? ArchiveListServerSource
+        val serverSource = viewModel?.currentSource as? ArchiveListServerSource
         serverSource?.run {
             searchResults?.let { outState.putStringArray(RESULTS_KEY, it.toTypedArray()) }
             outState.putInt(RESULTS_SIZE_KEY, totalSize)
@@ -498,11 +511,13 @@ class ArchiveListFragment : Fragment(), DatabaseRefreshListener, SharedPreferenc
             }
         }
 
-        model.archiveList?.observe(viewLifecycleOwner, {
-            (listView.adapter as ArchiveRecyclerViewAdapter).submitList(it)
-            val size = it.size
-            (activity as AppCompatActivity).supportActionBar?.subtitle = resources.getQuantityString(R.plurals.archive_count, size, size)
-        })
+        lifecycleScope.launch {
+            model.archiveList?.flow?.collectLatest {
+                val size = getDisplaySize()
+                (activity as AppCompatActivity).supportActionBar?.subtitle = resources.getQuantityString(R.plurals.archive_count, size, size)
+                (listView.adapter as ArchiveRecyclerViewAdapter).submitData(it)
+            }
+        }
 
         model.updateSort(sortMethod, descending)
         viewModel = model

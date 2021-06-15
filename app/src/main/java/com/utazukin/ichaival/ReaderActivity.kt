@@ -42,6 +42,7 @@ import androidx.viewpager2.widget.ViewPager2
 import com.bumptech.glide.Glide
 import com.utazukin.ichaival.ReaderFragment.OnFragmentInteractionListener
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.floor
 import kotlin.math.max
@@ -232,7 +233,7 @@ class ReaderActivity : BaseActivity(), OnFragmentInteractionListener, TabRemoved
         with(tabView) {
             layoutManager = LinearLayoutManager(context)
             adapter = ReaderTabViewAdapter(listener, listener, Glide.with(listener)).also {
-                viewModel.bookmarks.observe(this@ReaderActivity, { list -> it.submitList(list) })
+                launch { viewModel.bookmarks.flow.collectLatest { data -> it.submitData(data) } }
             }
 
             val dividerDecoration = DividerItemDecoration(context, LinearLayoutManager.VERTICAL)

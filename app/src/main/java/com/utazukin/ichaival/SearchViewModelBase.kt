@@ -1,6 +1,6 @@
 /*
  * Ichaival - Android client for LANraragi https://github.com/Utazukin/Ichaival/
- * Copyright (C) 2020 Utazukin
+ * Copyright (C) 2021 Utazukin
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -18,27 +18,28 @@
 
 package com.utazukin.ichaival
 
-import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.paging.DataSource
-import androidx.paging.LivePagedListBuilder
-import androidx.paging.PagedList
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.util.*
-
-private fun <T, TT> DataSource.Factory<T, TT>.toLiveData(pageSize: Int = 50) = LivePagedListBuilder(this, pageSize).build()
+import kotlinx.coroutines.withContext
 
 class ReaderTabViewModel : ViewModel() {
-    val bookmarks = DatabaseReader.database.archiveDao().getDataBookmarks().toLiveData(5)
+    val bookmarks = Pager(PagingConfig(5), null, DatabaseReader.database.archiveDao()::getDataBookmarks)
+    suspend fun getCount() = withContext(Dispatchers.IO) { DatabaseReader.database.archiveDao().getBookmarkCount() }
 }
 
 abstract class SearchViewModelBase : ViewModel() {
-    var archiveList: LiveData<PagedList<Archive>>? = null
+    var archiveList: Pager<Int, Archive>? = null
         protected set
     protected abstract val archiveDataFactory: ArchiveListDataFactory
     protected val archiveDao by lazy { DatabaseReader.database.archiveDao() }
+    val totalSize: Int
+        get() = currentSource?.totalSize ?: 0
+    val currentSource: ArchiveDataSourceBase?
+        get() = archiveDataFactory.currentSource
 
     suspend fun getRandom(excludeBookmarked: Boolean = true): Archive? {
         var data: Collection<String> = archiveDataFactory.currentSource?.searchResults ?: archiveDao.getAllIds()
@@ -55,7 +56,7 @@ abstract class SearchViewModelBase : ViewModel() {
 }
 
 class SearchViewModel : SearchViewModelBase() {
-    override val archiveDataFactory = ArchiveListDataFactory(false)
+    override val archiveDataFactory = ArchiveListDataFactory(false, ServerManager.pageSize)
 
     fun init(method: SortMethod, desc: Boolean, force: Boolean = false, isSearch: Boolean = false) {
         if (archiveList != null && !force)
@@ -63,7 +64,7 @@ class SearchViewModel : SearchViewModelBase() {
 
         archiveDataFactory.isSearch = isSearch
         archiveDataFactory.updateSort(method, desc, true)
-        archiveList = archiveDataFactory.toLiveData(ServerManager.pageSize)
+        archiveList = archiveDataFactory.pager
     }
 
     fun filter(searchResult: ServerSearchResult) = archiveDataFactory.updateSearchResults(searchResult)
@@ -96,7 +97,7 @@ class StaticCategoryModel : ArchiveViewModel() {
             categoryId = id
             archiveDataFactory.isSearch = false
             archiveDataFactory.updateSort(method, desc, true)
-            archiveList = archiveDataFactory.toLiveData()
+            archiveList = archiveDataFactory.pager
             sortMethod = method
             descending = desc
             results = ids
@@ -106,7 +107,7 @@ class StaticCategoryModel : ArchiveViewModel() {
 }
 
 open class ArchiveViewModel : SearchViewModelBase() {
-    override val archiveDataFactory = ArchiveListDataFactory(true)
+    override val archiveDataFactory = ArchiveListDataFactory(true, ServerManager.pageSize)
     protected var sortMethod = SortMethod.Alpha
     protected var descending = false
 
@@ -114,7 +115,7 @@ open class ArchiveViewModel : SearchViewModelBase() {
         if (archiveList == null) {
             archiveDataFactory.isSearch = isSearch
             archiveDataFactory.updateSort(method, desc, true)
-            archiveList = archiveDataFactory.toLiveData()
+            archiveList = archiveDataFactory.pager
             sortMethod = method
             descending = desc
             filter(filter, onlyNew)
@@ -149,10 +150,10 @@ open class ArchiveViewModel : SearchViewModelBase() {
         if (filter.isEmpty())
             return if (onlyNew) allArchives.filter { it.isNew }.map { it.id } else null
         else {
-            val normalized = filter.toString().toLowerCase(Locale.ROOT)
+            val normalized = filter.toString().lowercase()
             val spaceRegex by lazy { Regex("\\s") }
             for (archive in allArchives) {
-                if (archive.title.toLowerCase(Locale.ROOT).contains(normalized) && !mValues.contains(archive.id))
+                if (archive.title.lowercase().contains(normalized) && !mValues.contains(archive.id))
                     addIfNew(archive)
                 else {
                     val terms = filter.split(spaceRegex)
